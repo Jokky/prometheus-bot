@@ -1,13 +1,14 @@
 import os
-import json
-import time
-
-import schedule
+import re
 
 import telebot
 
 from dotenv import load_dotenv
 import urllib3
+
+from flask import Flask, request, json
+
+app = Flask(__name__)
 
 load_dotenv()
 
@@ -72,30 +73,12 @@ def format_float(value: str) -> str:
     return f'{round(float(value), 2):.10f}'
 
 
-# Получение алертов из Prometheus
-def get_alerts():
-    try:
-        response = http.request(
-            'GET',
-            f'{url}/api/v1/alerts'
-        )
-        body = json.loads(response.data)
-
-        if body['status'] == 'success':
-            return []
-
-        return body['data']['alerts']
-    except:
-        return []
-
-
 def send_message(name: str, value: str, measure_unit: str = ''):
-    bot.send_message(channel_id, f'*{name}*\n{format_measure_unit(measure_unit, value)}', parse_mode="MarkdownV2")
+    escape_value = re.escape(repr(format_measure_unit(measure_unit, value))[1:-1]).replace('\\\\', '\\')
+    bot.send_message(channel_id, f'*{name}*\n{escape_value}', parse_mode="MarkdownV2")
 
 
-def watch_alerts():
-    alerts = get_alerts()
-
+def send_alerts(alerts):
     for alert in alerts:
         annotation = alert['annotations']
         starts_at = alert['startsAt']
@@ -103,20 +86,17 @@ def watch_alerts():
         value = annotation['value']
         measure_unit = ''
 
-        if annotation['measureUnit']:
+        if 'measureUnit' in annotation:
             measure_unit = annotation['measureUnit']
 
         send_message(name, value, measure_unit)
 
 
-def main():
-    # Запускаем каждые N секунд получение алертов и отправляем сообщение
-    schedule.every(interval).seconds.do(watch_alerts)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+@app.route('/alert', methods=['POST'])
+def post_alert():
+    send_alerts(request.get_json()['alerts'])
+    return json.dumps({}), 200, {'ContentType': 'application/json'}
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run()
