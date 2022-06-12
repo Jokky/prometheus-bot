@@ -1,6 +1,14 @@
 # Prometheus BOT
 Telegram bot for alerting prometheus 
 
+## Configuring alert manager
+
+```
+- name: 'admins'
+  webhook_configs:
+  - send_resolved: True
+    url: http://127.0.0.1:5000/alert
+```
 
 ## Install dependencies
 ```
